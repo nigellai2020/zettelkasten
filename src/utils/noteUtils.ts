@@ -60,11 +60,11 @@ export const searchNotes = (
     const calculateScore = (text: string, field: 'title' | 'content' | 'tags', multiplier: number = 1) => {
       const lowerText = text.toLowerCase();
       let fieldScore = 0;
-      let hasMatch = false;
-      
+      let matchedWords = new Set<string>();
+         
       queryWords.forEach(word => {
         if (lowerText.includes(word)) {
-          hasMatch = true;
+          matchedWords.add(word);
           // Exact word match gets higher score
           const exactWordRegex = new RegExp(`\\b${word}\\b`, 'i');
           const isExactWord = exactWordRegex.test(text);
@@ -86,7 +86,9 @@ export const searchNotes = (
         }
       });
       
-      return hasMatch ? fieldScore * multiplier : 0;
+      // Only return score if ALL meaningful query words are matched
+      const hasAllMatches = matchedWords.size === queryWords.length && queryWords.length > 0;
+      return hasAllMatches ? fieldScore * multiplier : 0;
     };
     
     // Search based on mode
@@ -103,9 +105,9 @@ export const searchNotes = (
         totalScore += calculateScore(tag, 'tags', 2); // Tags are important
       });
     }
-    
+
     // Only include notes with matches
-    if (matches.length > 0) {
+    if (totalScore > 0 && matches.length > 0) {
       results.push({ 
         note, 
         matches: matches.sort((a, b) => (b.score || 0) - (a.score || 0)), // Sort matches by score

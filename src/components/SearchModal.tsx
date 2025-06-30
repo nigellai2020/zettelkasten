@@ -40,6 +40,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setIsSearching(true);
     const timeoutId = setTimeout(() => {
       const searchResults = searchNotes(query, notes, searchMode);
+      console.log('Search results:', searchResults);
       setResults(searchResults);
       setSelectedIndex(0);
       setIsSearching(false);
@@ -95,37 +96,49 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       highlightedText = text.slice(0, maxLength) + (text.length > maxLength ? '...' : '');
     }
 
-    // Find all matches for all query words and sort them by position
+    // Find matches for query words in order, only allowing each match to appear after the previous
     const matches: { start: number; end: number; word: string }[] = [];
-    
-    queryWords.forEach(word => {
+    let lastEnd = 0;
+    for (let i = 0; i < queryWords.length; i++) {
+      const word = queryWords[i];
       const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(escapedWord, 'gi');
       let match;
-      
+      let found = false;
       while ((match = regex.exec(highlightedText)) !== null) {
-        matches.push({
-          start: match.index,
-          end: match.index + match[0].length,
-          word: match[0]
-        });
+        if (match.index >= lastEnd) {
+          matches.push({
+            start: match.index,
+            end: match.index + match[0].length,
+            word: match[0]
+          });
+          lastEnd = match.index + match[0].length;
+          found = true;
+          break; // Only take the first valid match for this word
+        }
         // Prevent infinite loop for zero-length matches
         if (match.index === regex.lastIndex) {
           regex.lastIndex++;
         }
       }
-    });
+      if (!found) {
+        // If a word is not found in order, stop matching further
+        break;
+      }
+    }
 
     // Sort matches by start position (descending) to avoid position shifts when inserting HTML
     matches.sort((a, b) => b.start - a.start);
 
-    // Remove overlapping matches (keep the first one found)
+    // Remove overlapping matches (keep the first one found) and filter out single characters
     const filteredMatches = matches.filter((match, index) => {
+      // Remove overlapping matches
       return !matches.slice(0, index).some(prevMatch => 
         (match.start >= prevMatch.start && match.start < prevMatch.end) ||
         (match.end > prevMatch.start && match.end <= prevMatch.end)
       );
     });
+
 
     // Apply highlighting from right to left to avoid position shifts
     filteredMatches.forEach(match => {
