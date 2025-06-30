@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for markdown content */
+.markdown-content {
+  @apply text-gray-900 dark:text-gray-100;
+}
+
+/* Heading anchor links */
+.markdown-content h1:hover .heading-anchor,
+.markdown-content h2:hover .heading-anchor,
+.markdown-content h3:hover .heading-anchor,
+.markdown-content h4:hover .heading-anchor,
+.markdown-content h5:hover .heading-anchor,
+.markdown-content h6:hover .heading-anchor {
+  @apply opacity-100;
+}
+
+/* Smooth scroll behavior */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Scroll margin for headings to account for fixed headers */
+.scroll-mt-4 {
+  scroll-margin-top: 1rem;
+}
+
+/* Code block syntax highlighting placeholder */
+.markdown-content pre code {
+  @apply block overflow-x-auto;
+}
+
+/* Table styling */
+.markdown-content table {
+  @apply border-collapse;
+}
+
+.markdown-content table th {
+  @apply font-semibold;
+}
+
+/* Task list styling */
+.markdown-content input[type="checkbox"] {
+  @apply mr-2 rounded;
+}
+
+/* Link styling for note links */
+.markdown-content a[href^="note://"] {
+  @apply bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded border border-blue-200 dark:border-blue-800 no-underline;
+}
+
+.markdown-content a[href^="note://"]:hover {
+  @apply bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700;
+}
+
+/* Blockquote enhancements */
+.markdown-content blockquote p:last-child {
+  @apply mb-0;
+}
+
+/* List spacing improvements */
+.markdown-content ul ul,
+.markdown-content ol ol,
+.markdown-content ul ol,
+.markdown-content ol ul {
+  @apply mt-2 mb-0;
+}
+
+/* Image styling */
+.markdown-content img {
+  @apply rounded-lg shadow-sm border border-gray-200 dark:border-dark-600 max-w-full h-auto;
+}
+
+/* Horizontal rule styling */
+.markdown-content hr {
+  @apply border-t-2 border-gray-200 dark:border-dark-600;
+}
+
+/* Table of contents styling */
+.toc-item {
+  @apply transition-all duration-200;
+}
+
+.toc-item:hover {
+  @apply transform translate-x-1;
+}
+
+/* Dark mode support for highlight effect */
+.dark .markdown-content h1,
+.dark .markdown-content h2,
+.dark .markdown-content h3,
+.dark .markdown-content h4,
+.dark .markdown-content h5,
+.dark .markdown-content h6 {
+  transition: background-color 0.3s ease;
+}
