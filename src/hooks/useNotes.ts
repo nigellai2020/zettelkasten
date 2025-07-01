@@ -1,33 +1,22 @@
+
 import { useState, useEffect } from 'react';
 import { Note } from '../types';
 import { extractLinks, extractTags } from '../utils/noteUtils';
+import { getAllNotes, saveNotes } from '../utils/db';
 
-const STORAGE_KEY = 'zettelkasten-notes';
+
 
 export const useNotes = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedNotes = localStorage.getItem(STORAGE_KEY);
-    if (savedNotes) {
-      try {
-        const parsedNotes = JSON.parse(savedNotes).map((note: any) => ({
-          ...note,
-          createdAt: new Date(note.createdAt),
-          updatedAt: new Date(note.updatedAt)
-        }));
-        setNotes(parsedNotes);
-      } catch (error) {
-        console.error('Error loading notes:', error);
-      }
-    }
-    setLoading(false);
+    getAllNotes().then(setNotes).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (!loading) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+      saveNotes(notes);
     }
   }, [notes, loading]);
 
