@@ -3,6 +3,7 @@ import { Search, X, FileText, Tag, Calendar, ArrowRight, Filter, Clock } from 'l
 import { Note, SearchResult } from '../types';
 import { searchNotes } from '../utils/noteUtils';
 
+
 interface SearchModalProps {
   notes: Note[];
   isOpen: boolean;
@@ -30,24 +31,45 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     }
   }, [isOpen]);
 
+  // --- Web Worker for search ---
+  const workerRef = useRef<Worker | null>(null);
+  const [workerReady, setWorkerReady] = useState(false);
+
+  // Build the search index in the worker when notes change
   useEffect(() => {
-    if (!query.trim()) {
+    workerRef.current = new Worker(new URL('../workers/searchWorker.js', import.meta.url));
+    workerRef.current.onmessage = (event) => {
+      if (event.data.type === 'ready') setWorkerReady(true);
+    };
+    workerRef.current.postMessage({ type: 'build', notes });
+    return () => {
+      workerRef.current?.terminate();
+      workerRef.current = null;
+      setWorkerReady(false);
+    };
+  }, [notes]);
+
+  useEffect(() => {
+    if (!query.trim() || query.trim().length < 3) {
       setResults([]);
       setSelectedIndex(0);
       return;
     }
-
+    if (!workerReady || !workerRef.current) return;
     setIsSearching(true);
     const timeoutId = setTimeout(() => {
-      const searchResults = searchNotes(query, notes, searchMode);
-      console.log('Search results:', searchResults);
-      setResults(searchResults);
-      setSelectedIndex(0);
-      setIsSearching(false);
-    }, 150);
-
+      workerRef.current!.onmessage = (event) => {
+        if (event.data.type === 'results') {
+          const results = searchNotes(query, event.data.results, searchMode);
+          setResults(results);
+          setSelectedIndex(0);
+          setIsSearching(false);
+        }
+      };
+      workerRef.current!.postMessage({ type: 'search', query, searchMode });
+    }, 300);
     return () => clearTimeout(timeoutId);
-  }, [query, notes, searchMode]);
+  }, [query, searchMode, workerReady]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
