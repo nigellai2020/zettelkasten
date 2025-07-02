@@ -61,10 +61,19 @@ renderer.blockquote = (quote: string) => {
   return `<blockquote class="border-l-4 border-blue-500 dark:border-blue-400 pl-4 py-2 mb-4 bg-blue-50 dark:bg-blue-900/20 text-gray-800 dark:text-gray-200 italic rounded-r-lg">${quote}</blockquote>`;
 };
 
+function escapeHtml(html: string): string {
+  return html
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Custom code block renderer
 renderer.code = (code: string, language?: string) => {
   const langClass = language ? `language-${language}` : '';
-  return `<pre class="bg-gray-100 dark:bg-dark-700 rounded-lg p-4 mb-4 overflow-x-auto border border-gray-200 dark:border-dark-600"><code class="${langClass} text-sm font-mono text-gray-800 dark:text-gray-200">${code}</code></pre>`;
+  return `<pre class="bg-gray-100 dark:bg-dark-700 rounded-lg p-4 mb-4 overflow-x-auto border border-gray-200 dark:border-dark-600"><code class="${langClass} text-sm font-mono text-gray-800 dark:text-gray-200">${escapeHtml(code)}</code></pre>`;
 };
 
 // Custom inline code renderer
@@ -118,17 +127,15 @@ marked.setOptions({
   gfm: true, // GitHub Flavored Markdown
   breaks: true, // Convert \n to <br>
   pedantic: false,
-  sanitize: false, // We'll handle XSS prevention ourselves
-  smartypants: true // Use smart quotes
 });
 
-export const renderMarkdown = (content: string, notes: Note[]): string => {
+export const renderMarkdown = async (content: string, notes: Note[]): Promise<string> => {
   // First, process note links [[Note Title]]
   const processedContent = processNoteLinks(content, notes);
   
   // Then render markdown
-  const htmlContent = marked(processedContent);
-  
+  const htmlContent = await marked(processedContent);
+
   return htmlContent;
 };
 

@@ -148,7 +148,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   }
 
   const tableOfContents = generateTableOfContents(content);
-  const renderedContent = renderMarkdown(processGitHubMarkdown(content), notes);
+  const [renderedContent, setRenderedContent] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const render = async () => {
+      const html = await Promise.resolve(renderMarkdown(processGitHubMarkdown(content), notes));
+      if (!cancelled) setRenderedContent(html);
+    };
+    render();
+    return () => { cancelled = true; };
+  }, [content, notes]);
 
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-dark-800 h-full transition-colors">
