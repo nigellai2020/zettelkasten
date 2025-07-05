@@ -10,24 +10,48 @@ import { TreeView } from './components/TreeView';
 
 function App() {
   const { notes, loading, createNote, updateNote, deleteNote, exportNotes, importNotes } = useNotes();
-  // Multi-tab state
-  const [openTabs, setOpenTabs] = useState<string[]>([]); // array of note IDs
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  // Multi-tab state, persisted in localStorage
+  const [openTabs, setOpenTabs] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('zettelkasten-openTabs');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeTabId, setActiveTabId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('zettelkasten-activeTabId') || null;
+    } catch {
+      return null;
+    }
+  });
   const [currentView, setCurrentView] = useState<'notes' | 'tree' | 'graph'>('notes');
   const [showGraphModal, setShowGraphModal] = useState(false);
 
   // Multi-tab logic
   const allTags = [...new Set(notes.flatMap(note => note.tags))];
-  // If no tabs open, open the first note by default (optional)
+
+  // Persist openTabs and activeTabId to localStorage
   useEffect(() => {
-    if (notes.length > 0 && openTabs.length === 0) {
-      setOpenTabs([notes[0].id]);
-      setActiveTabId(notes[0].id);
-    }
-  }, [notes]);
+    try {
+      localStorage.setItem('zettelkasten-openTabs', JSON.stringify(openTabs));
+    } catch {}
+  }, [openTabs]);
+
+  useEffect(() => {
+    try {
+      if (activeTabId) {
+        localStorage.setItem('zettelkasten-activeTabId', activeTabId);
+      } else {
+        localStorage.removeItem('zettelkasten-activeTabId');
+      }
+    } catch {}
+  }, [activeTabId]);
 
   // Remove closed/deleted notes from openTabs
   useEffect(() => {
+    if (loading) return; // Avoid running this during initial load
     setOpenTabs((tabs) => tabs.filter((id) => notes.some((n) => n.id === id)));
     setActiveTabId((id) => (id && notes.some((n) => n.id === id) ? id : openTabs[0] || null));
   }, [notes]);
@@ -155,7 +179,11 @@ function App() {
         {currentView === 'notes' ? (
           <>
             <Sidebar
-              notes={notes}
+              notes={notes
+                .slice()
+                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                .slice(0, 50)
+              }
               selectedNoteId={activeTabId}
               onSelectNote={handleSelectNote}
               onCreateNote={handleCreateNote}
