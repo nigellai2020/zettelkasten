@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, Tag, Calendar, FileText, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Note } from '../types';
 import { getBacklinks } from '../utils/noteUtils';
+import { toDateString } from '../utils/dateUtils';
 
 interface MetadataPanelProps {
   note: Note | null;
@@ -54,7 +55,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({
         <div className="space-y-2 text-sm text-gray-600 dark:text-dark-400">
           <div className="flex items-center gap-2">
             <Calendar size={14} />
-            <span>Created: {note.createdAt.toLocaleDateString()}</span>
+            <span>Created: {toDateString(note.createdAt)}</span>
           </div>
           <div className="flex items-center gap-2">
             <FileText size={14} />
@@ -105,7 +106,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({
                     {linkedNote.content.slice(0, 80)}...
                   </div>
                   <div className="text-xs text-gray-400 dark:text-dark-600 mt-1">
-                    {linkedNote.updatedAt.toLocaleDateString()}
+                    {toDateString(linkedNote.updatedAt)}
                   </div>
                 </button>
               ))}
@@ -140,7 +141,7 @@ export const MetadataPanel: React.FC<MetadataPanelProps> = ({
                     {backlink.content.slice(0, 80)}...
                   </div>
                   <div className="text-xs text-gray-400 dark:text-dark-600 mt-1">
-                    {backlink.updatedAt.toLocaleDateString()}
+                    {toDateString(backlink.updatedAt)}
                   </div>
                 </button>
               ))}

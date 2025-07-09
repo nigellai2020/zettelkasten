@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Plus, FileText, Tag, Download, Upload } from 'lucide-react';
 import { Note, SearchResult } from '../types';
 import { searchNotes } from '../utils/noteUtils';
+import { toDateString } from '../utils/dateUtils';
 
 interface SidebarProps {
   notes: Note[];
@@ -200,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         )}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-dark-500">
-                        {note.updatedAt.toLocaleDateString()}
+                        {toDateString(note.updatedAt)}
                       </div>
                     </div>
                   </button>

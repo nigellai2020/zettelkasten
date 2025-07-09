@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNotes } from './hooks/useNotes';
 import { Header } from './components/Header';
@@ -10,6 +9,37 @@ import { TreeView } from './components/TreeView';
 
 function App() {
   const { notes, loading, createNote, updateNote, deleteNote, exportNotes, importNotes } = useNotes();
+
+  // Download notes from Worker API
+  const handleDownloadFromWorker = async () => {
+    const endpoint = import.meta.env.VITE_WORKER_API_ENDPOINT;
+    const apiKey = import.meta.env.VITE_WORKER_API_KEY;
+    if (!endpoint) {
+      alert('Worker API endpoint is not set. Please configure VITE_WORKER_API_ENDPOINT in your .env file.');
+      return;
+    }
+    try {
+      const res = await fetch(endpoint, {
+        headers: apiKey ? { 'X-API-Key': `${apiKey}` } : {},
+      });
+      if (!res.ok) throw new Error(`Failed to fetch notes: ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data)) throw new Error('Invalid notes format from Worker');
+      // Wrap the downloaded notes in a File and call importNotes as expected
+      const file = new File([JSON.stringify(data)], 'worker-notes.json', { type: 'application/json' });
+      await importNotes(file);
+      alert('Notes downloaded and imported successfully!');
+    } catch (err) {
+      let message = '';
+      if (err && typeof err === 'object' && 'message' in err) {
+        message = (err as any).message;
+      } else {
+        message = String(err);
+      }
+      alert('Error downloading notes: ' + message);
+    }
+  };
+
   // Multi-tab state, persisted in localStorage
   const [openTabs, setOpenTabs] = useState<string[]>(() => {
     try {
@@ -30,7 +60,7 @@ function App() {
   const [showGraphModal, setShowGraphModal] = useState(false);
 
   // Multi-tab logic
-  const allTags = [...new Set(notes.flatMap(note => note.tags))];
+  const allTags = [...new Set(notes.flatMap((note: any) => note.tags))];
 
   // Persist openTabs and activeTabId to localStorage
   useEffect(() => {
@@ -52,12 +82,12 @@ function App() {
   // Remove closed/deleted notes from openTabs
   useEffect(() => {
     if (loading) return; // Avoid running this during initial load
-    setOpenTabs((tabs) => tabs.filter((id) => notes.some((n) => n.id === id)));
-    setActiveTabId((id) => (id && notes.some((n) => n.id === id) ? id : openTabs[0] || null));
+    setOpenTabs((tabs: string[]) => tabs.filter((id: string) => notes.some((n: any) => n.id === id)));
+    setActiveTabId((id: string | null) => (id && notes.some((n: any) => n.id === id) ? id : openTabs[0] || null));
   }, [notes]);
 
   // Find the active note for the tabbed editor
-  const activeNote = notes.find((n) => n.id === activeTabId) || null;
+  const activeNote = notes.find((n: any) => n.id === activeTabId) || null;
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -77,7 +107,7 @@ function App() {
 
   // Open a note in a tab (like VS Code)
   const openNoteTab = (noteId: string) => {
-    setOpenTabs((tabs) => {
+    setOpenTabs((tabs: string[]) => {
       if (tabs.includes(noteId)) return tabs;
       return [...tabs, noteId];
     });
@@ -89,9 +119,9 @@ function App() {
 
   // Close a tab (like VS Code)
   const closeTab = (noteId: string) => {
-    setOpenTabs((tabs) => {
+    setOpenTabs((tabs: string[]) => {
       const idx = tabs.indexOf(noteId);
-      const newTabs = tabs.filter((id) => id !== noteId);
+      const newTabs = tabs.filter((id: string) => id !== noteId);
       // If closing the active tab, activate the next tab to the right, or left if at end
       if (activeTabId === noteId) {
         setActiveTabId(newTabs.length > 0 ? newTabs[Math.min(idx, newTabs.length - 1)] : null);
@@ -144,11 +174,12 @@ function App() {
         tagCount={allTags.length}
         notes={notes}
         onSelectNote={handleSelectNote}
+        onDownloadFromWorker={handleDownloadFromWorker}
       />
       {/* Tab Bar */}
       <div className="flex-shrink-0 flex bg-gray-100 dark:bg-dark-700 border-b border-gray-200 dark:border-dark-600">
-        {openTabs.map((id) => {
-          const note = notes.find((n) => n.id === id);
+        {openTabs.map((id: string) => {
+          const note = notes.find((n: any) => n.id === id);
           if (!note) return null;
           return (
             <div
@@ -181,7 +212,7 @@ function App() {
             <Sidebar
               notes={notes
                 .slice()
-                .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+                .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
                 .slice(0, 50)
               }
               selectedNoteId={activeTabId}
@@ -226,7 +257,7 @@ function App() {
         <GraphView
           notes={notes}
           selectedNoteId={activeTabId}
-          onSelectNote={(noteId) => {
+          onSelectNote={(noteId: string) => {
             handleSelectNote(noteId);
             setShowGraphModal(false);
           }}

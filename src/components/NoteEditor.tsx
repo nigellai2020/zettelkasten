@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Edit3, Eye, Trash2, Calendar, Hash, BookOpen } from 'lucide-react';
 import { Note } from '../types';
 import { renderMarkdown, processGitHubMarkdown, generateTableOfContents } from '../utils/markdownUtils';
+import { toDateString } from '../utils/dateUtils';
 
 interface NoteEditorProps {
   note: Note | null;
@@ -195,7 +196,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <div className="text-sm text-gray-500 dark:text-dark-500 flex items-center gap-4">
               <div className="flex items-center gap-1">
                 <Calendar size={14} />
-                <span>Updated {note.updatedAt.toLocaleDateString()}</span>
+                <span>Updated {toDateString(note.updatedAt)}</span>
               </div>
               {note.tags.length > 0 && (
                 <div className="flex items-center gap-1">

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Note } from '../types';
 import { extractLinks, extractTags } from '../utils/noteUtils';
@@ -156,10 +155,14 @@ export const useNotes = () => {
           .filter((note: any) => note.id && note.title && note.content !== undefined)
           .map((note: any) => ({
             ...note,
-            createdAt: new Date(note.createdAt),
-            updatedAt: new Date(note.updatedAt)
+            // Normalize literal \n to real newlines in content
+            content: typeof note.content === 'string' ? note.content.replace(/\\n/g, '\n') : note.content,
+            links: note.links ? note.links.split(',').map((link: string) => link.trim()) : [],
+            tags: note.tags ? note.tags.split(',').map((tag: string) => tag.trim()) : [],
+            createdAt: parseToDate(note.createdAt),
+            updatedAt: parseToDate(note.updatedAt)
           }));
-        
+
         setNotes(prev => {
           const existingIds = new Set(prev.map(n => n.id));
           const newNotes = validNotes.filter((n: Note) => !existingIds.has(n.id));
@@ -174,6 +177,22 @@ export const useNotes = () => {
     };
     reader.readAsText(file);
   };
+
+  // Helper to robustly parse unix timestamp, ISO string, or Date
+  function parseToDate(val: any): Date {
+    if (val instanceof Date) return val;
+    if (typeof val === 'number' && !isNaN(val)) return new Date(val);
+    if (typeof val === 'string') {
+      // Try parse as number first (unix ms)
+      const num = Number(val);
+      if (!isNaN(num) && val.trim() !== '') return new Date(num);
+      // Fallback: parse as ISO string
+      const d = new Date(val);
+      if (!isNaN(d.getTime())) return d;
+    }
+    // Fallback: now
+    return new Date();
+  }
 
   return {
     notes,

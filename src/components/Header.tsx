@@ -11,6 +11,7 @@ interface HeaderProps {
   tagCount: number;
   notes: Note[];
   onSelectNote: (noteId: string) => void;
+  onDownloadFromWorker?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -19,7 +20,8 @@ export const Header: React.FC<HeaderProps> = ({
   noteCount,
   tagCount,
   notes,
-  onSelectNote
+  onSelectNote,
+  onDownloadFromWorker
 }) => {
   const { theme, toggleTheme } = useTheme();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -77,8 +79,19 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </nav>
 
-            {/* Right side - Search, Stats and Theme Toggle */}
+            {/* Right side - Search, Stats, Download, and Theme Toggle */}
             <div className="flex items-center gap-4">
+              {/* Download from Worker button */}
+              {onDownloadFromWorker && (
+                <button
+                  onClick={onDownloadFromWorker}
+                  className="flex items-center gap-2 px-4 py-2 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-semibold transition-colors"
+                  title="Download notes from Worker (cloud sync)"
+                >
+                  <Network size={18} />
+                  <span>Download notes</span>
+                </button>
+              )}
               {/* Global Search Button */}
               <button
                 onClick={() => setIsSearchOpen(true)}
@@ -91,7 +104,6 @@ export const Header: React.FC<HeaderProps> = ({
                   ⌘K
                 </kbd>
               </button>
-
               {/* Stats */}
               <div className="flex items-center gap-6 text-sm text-gray-600 dark:text-dark-400">
                 <div className="flex items-center gap-2">
@@ -103,7 +115,6 @@ export const Header: React.FC<HeaderProps> = ({
                   <span>{tagCount} tags</span>
                 </div>
               </div>
-
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, X, FileText, Tag, Calendar, ArrowRight, Filter, Clock } from 'lucide-react';
 import { Note, SearchResult } from '../types';
 import { searchNotes } from '../utils/noteUtils';
+import { toDateString } from '../utils/dateUtils';
 
-
+// Props interface
 interface SearchModalProps {
   notes: Note[];
   isOpen: boolean;
@@ -25,9 +26,18 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Advanced: tag scoping with combo box
+  const allTags = Array.from(new Set(notes.flatMap(n => n.tags))).sort();
+  const [tagScope, setTagScope] = useState<string[]>([]); // tags to filter by
+  const [tagInput, setTagInput] = useState('');
+  const tagInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
+    }
+    if (!isOpen) {
+      setTagScope([]); // reset tag scope when closed
     }
   }, [isOpen]);
 
@@ -60,7 +70,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     const timeoutId = setTimeout(() => {
       workerRef.current!.onmessage = (event) => {
         if (event.data.type === 'results') {
-          const results = searchNotes(query, event.data.results, searchMode);
+          // Advanced: filter by tag scope if set
+          let filtered = event.data.results;
+          if (tagScope.length > 0) {
+            filtered = filtered.filter((r: any) =>
+              tagScope.every(tag => r.tags && r.tags.includes(tag))
+            );
+          }
+          const results = searchNotes(query, filtered, searchMode);
           setResults(results);
           setSelectedIndex(0);
           setIsSearching(false);
@@ -69,7 +86,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       workerRef.current!.postMessage({ type: 'search', query, searchMode });
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [query, searchMode, workerReady]);
+  }, [query, searchMode, workerReady, tagScope]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -206,7 +223,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           </div>
 
           {/* Search Filters */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-2">
             <Filter size={16} className="text-gray-500 dark:text-dark-400" />
             <div className="flex gap-2">
               {[
@@ -228,6 +245,84 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   {label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Tag Scope Combo Box */}
+          <div className="mb-2">
+            <div className="flex flex-wrap gap-2 mb-2">
+              {tagScope.map(tag => (
+                <span
+                  key={tag}
+                className="flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 border border-blue-300 dark:border-blue-700"
+                >
+                  #{tag}
+                  <button
+                    className="ml-1 text-blue-400 hover:text-red-500"
+                    onClick={() => setTagScope(scope => scope.filter(t => t !== tag))}
+                    title={`Remove tag ${tag}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {tagScope.length > 0 && (
+                <button
+                  onClick={() => setTagScope([])}
+                  className="ml-2 px-2 py-0.5 rounded-full text-xs border border-gray-300 dark:border-dark-600 text-gray-500 dark:text-dark-400 hover:bg-gray-200 dark:hover:bg-dark-600"
+                  title="Clear tag filter"
+                  disabled={tagScope.length === 0}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="relative w-64">
+              <input
+                ref={tagInputRef}
+                type="text"
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && tagInput.trim()) {
+                    const match = allTags.find(t => t.toLowerCase() === tagInput.trim().toLowerCase());
+                    if (match && !tagScope.includes(match)) {
+                      setTagScope(scope => [...scope, match]);
+                      setTagInput('');
+                    }
+                  } else if (e.key === 'Backspace' && !tagInput && tagScope.length > 0) {
+                    setTagScope(scope => scope.slice(0, -1));
+                  }
+                }}
+                placeholder="Filter by tag..."
+                className="w-full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-gray-900 dark:text-dark-100 text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {/* Dropdown for tag suggestions */}
+              {tagInput && (
+                <div className="absolute left-0 right-0 mt-1 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded shadow-lg z-10 max-h-40 overflow-y-auto">
+                  {allTags.filter(tag =>
+                    tag.toLowerCase().includes(tagInput.toLowerCase()) && !tagScope.includes(tag)
+                  ).length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-gray-400">No tags found</div>
+                  ) : (
+                    allTags.filter(tag =>
+                      tag.toLowerCase().includes(tagInput.toLowerCase()) && !tagScope.includes(tag)
+                    ).map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => {
+                          setTagScope(scope => [...scope, tag]);
+                          setTagInput('');
+                          tagInputRef.current?.focus();
+                        }}
+                        className="block w-full text-left px-3 py-2 text-xs text-gray-900 dark:text-dark-100 hover:bg-blue-100 dark:hover:bg-dark-700"
+                      >
+                        #{tag}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -313,7 +408,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-dark-500">
                         <div className="flex items-center gap-1">
                           <Calendar size={12} />
-                          <span>{result.note.updatedAt.toLocaleDateString()}</span>
+                          <span>{toDateString(result.note.updatedAt)}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock size={12} />

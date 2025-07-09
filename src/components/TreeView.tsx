@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown, FileText, Tag, Hash, Calendar, ArrowRight, TreePine } from 'lucide-react';
 import { Note } from '../types';
+import { toDateString } from '../utils/dateUtils';
 
 interface TreeViewProps {
   notes: Note[];
@@ -105,12 +106,7 @@ export const TreeView: React.FC<TreeViewProps> = ({ notes, onSelectNote }) => {
         .map(([date, dateNotes]) => ({
           id: `date-${date}`,
           type: 'date',
-          title: new Date(date).toLocaleDateString('en-US', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          }),
+          title: toDateString(date),
           count: dateNotes.length,
           children: dateNotes
             .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
@@ -269,7 +265,7 @@ export const TreeView: React.FC<TreeViewProps> = ({ notes, onSelectNote }) => {
                   <span>{node.note.links.length}</span>
                 </div>
               )}
-              <span>{node.note.updatedAt.toLocaleDateString()}</span>
+              <span>{toDateString(node.note.updatedAt)}</span>
             </div>
           )}
         </div>
