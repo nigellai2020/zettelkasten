@@ -20,6 +20,7 @@ export const getAllNotes = async (): Promise<Note[]> => {
     ...n,
     createdAt: new Date(n.createdAt),
     updatedAt: new Date(n.updatedAt),
+    dirty: n.dirty || false,
   }));
 };
 

@@ -6,6 +6,7 @@ export interface Note {
   createdAt: Date;
   updatedAt: Date;
   links: string[]; // IDs of linked notes
+  dirty?: boolean; // true if local changes not yet synced
 }
 
 export interface SearchResult {

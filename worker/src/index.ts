@@ -34,7 +34,15 @@ export default {
 		const url = new URL(request.url);
 		if (url.pathname === '/api/notes' && request.method === 'GET') {
 			try {
-				const { results } = await env.DB.prepare('SELECT * FROM notes').all();
+				// Support incremental sync: ?updated_after=timestamp
+				const updatedAfter = url.searchParams.get('updated_after');
+				let query = 'SELECT * FROM notes';
+				let params: any[] = [];
+				if (updatedAfter) {
+					query += ' WHERE updated_at > ?';
+					params.push(Number(updatedAfter));
+				}
+				const { results } = await env.DB.prepare(query).bind(...params).all();
 				return new Response(JSON.stringify(results), {
 					headers: { 'Content-Type': 'application/json', ...corsHeaders },
 				});
@@ -50,9 +58,16 @@ export default {
 				const { id, title, content, tags, links } = await request.json() as any;
 				const now = Date.now();
 				await env.DB.prepare(
-					'INSERT INTO notes (id, title, content, tags, created_at, updated_at, links) VALUES (?, ?, ?, ?, ?, ?, ?)'
+					`INSERT INTO notes (id, title, content, tags, created_at, updated_at, links)
+				 VALUES (?, ?, ?, ?, ?, ?, ?)
+				 ON CONFLICT(id) DO UPDATE SET
+				   title=excluded.title,
+				   content=excluded.content,
+				   tags=excluded.tags,
+				   updated_at=excluded.updated_at,
+				   links=excluded.links`
 				)
-					.bind(id, title, content, JSON.stringify(tags || []), now, now, JSON.stringify(links || []))
+					.bind(id, title, content, tags, now, now, links)
 					.run();
 				return new Response(JSON.stringify({ message: 'Note added' }), {
 					status: 201,

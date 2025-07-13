@@ -81,15 +81,15 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Right side - Search, Stats, Download, and Theme Toggle */}
             <div className="flex items-center gap-4">
-              {/* Download from Worker button */}
+              {/* Sync notes button */}
               {onDownloadFromWorker && (
                 <button
                   onClick={onDownloadFromWorker}
                   className="flex items-center gap-2 px-4 py-2 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-semibold transition-colors"
-                  title="Download notes from Worker (cloud sync)"
+                  title="Sync notes with Worker (cloud sync)"
                 >
                   <Network size={18} />
-                  <span>Download notes</span>
+                  <span>Sync notes</span>
                 </button>
               )}
               {/* Global Search Button */}

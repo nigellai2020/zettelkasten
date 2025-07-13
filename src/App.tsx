@@ -8,36 +8,11 @@ import { GraphView } from './components/GraphView';
 import { TreeView } from './components/TreeView';
 
 function App() {
-  const { notes, loading, createNote, updateNote, deleteNote, exportNotes, importNotes } = useNotes();
+  const { notes, loading, createNote, updateNote, deleteNote, exportNotes, importNotes, syncNotes } = useNotes();
 
-  // Download notes from Worker API
-  const handleDownloadFromWorker = async () => {
-    const endpoint = import.meta.env.VITE_WORKER_API_ENDPOINT;
-    const apiKey = import.meta.env.VITE_WORKER_API_KEY;
-    if (!endpoint) {
-      alert('Worker API endpoint is not set. Please configure VITE_WORKER_API_ENDPOINT in your .env file.');
-      return;
-    }
-    try {
-      const res = await fetch(endpoint, {
-        headers: apiKey ? { 'X-API-Key': `${apiKey}` } : {},
-      });
-      if (!res.ok) throw new Error(`Failed to fetch notes: ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data)) throw new Error('Invalid notes format from Worker');
-      // Wrap the downloaded notes in a File and call importNotes as expected
-      const file = new File([JSON.stringify(data)], 'worker-notes.json', { type: 'application/json' });
-      await importNotes(file);
-      alert('Notes downloaded and imported successfully!');
-    } catch (err) {
-      let message = '';
-      if (err && typeof err === 'object' && 'message' in err) {
-        message = (err as any).message;
-      } else {
-        message = String(err);
-      }
-      alert('Error downloading notes: ' + message);
-    }
+  // Sync notes with Worker API
+  const handleSyncNotes = async () => {
+    await syncNotes();
   };
 
   // Multi-tab state, persisted in localStorage
@@ -174,7 +149,7 @@ function App() {
         tagCount={allTags.length}
         notes={notes}
         onSelectNote={handleSelectNote}
-        onDownloadFromWorker={handleDownloadFromWorker}
+        onDownloadFromWorker={handleSyncNotes}
       />
       {/* Tab Bar */}
       <div className="flex-shrink-0 flex bg-gray-100 dark:bg-dark-700 border-b border-gray-200 dark:border-dark-600">

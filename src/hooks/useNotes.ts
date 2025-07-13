@@ -28,7 +28,8 @@ export const useNotes = () => {
       tags: extractTags(content),
       createdAt: now,
       updatedAt: now,
-      links: []
+      links: [],
+      dirty: true
     };
 
     setNotes(prev => {
@@ -46,7 +47,7 @@ export const useNotes = () => {
 
       const oldTitle = noteToUpdate.title;
       const newTitle = updates.title;
-      
+
       // Check if title is being changed
       const titleChanged = newTitle && newTitle !== oldTitle;
 
@@ -56,7 +57,8 @@ export const useNotes = () => {
             ...note,
             ...updates,
             updatedAt: new Date(),
-            tags: updates.content ? extractTags(updates.content) : note.tags
+            tags: updates.content ? extractTags(updates.content) : note.tags,
+            dirty: true
           };
           return updatedNote;
         }
@@ -67,7 +69,7 @@ export const useNotes = () => {
       if (titleChanged) {
         newNotes = updateLinksAfterTitleChange(newNotes, oldTitle, newTitle!);
       }
-      
+
       updateAllLinks(newNotes);
       return newNotes;
     });
@@ -80,18 +82,112 @@ export const useNotes = () => {
 
       // Remove the note and update all links
       let newNotes = prev.filter(note => note.id !== id);
-      
+
       // Remove any broken links that pointed to the deleted note
       newNotes = newNotes.map(note => ({
         ...note,
         content: note.content.replace(
-          new RegExp(`\\[\\[${escapeRegExp(noteToDelete.title)}\\]\\]`, 'gi'),
+          new RegExp(`\[\[${escapeRegExp(noteToDelete.title)}\]\]`, 'gi'),
           noteToDelete.title // Convert [[Title]] back to plain text
-        )
+        ),
+        dirty: true
       }));
 
       updateAllLinks(newNotes);
       return newNotes;
+    });
+  };
+  // --- SYNC LOGIC ---
+  /**
+   * Sync notes with remote backend:
+   * 1. Upload all dirty notes (POST/upsert)
+   * 2. Download all remote notes updated after latest local updated_at
+   * 3. Merge remote notes, resolving conflicts by updated_at (latest wins)
+   * 4. Mark uploaded notes as clean
+   */
+  const syncNotes = async () => {
+    const endpoint = import.meta.env.VITE_WORKER_API_ENDPOINT;
+    const apiKey = import.meta.env.VITE_WORKER_API_KEY;
+    if (!endpoint) {
+      alert('Worker API endpoint is not set. Please configure VITE_WORKER_API_ENDPOINT in your .env file.');
+      return;
+    }
+    // 1. Upload dirty notes
+    const dirtyNotes = notes.filter(n => n.dirty);
+    for (const note of dirtyNotes) {
+      try {
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(apiKey ? { 'X-API-Key': apiKey } : {})
+          },
+          body: JSON.stringify({
+            id: note.id,
+            title: note.title,
+            content: note.content,
+            tags: note.tags.join(','),
+            links: note.links.join(','),
+          })
+        });
+      } catch (e) {
+        // If upload fails, keep dirty flag
+        console.error('Failed to upload note', note.id, e);
+      }
+    }
+
+    // 2. Download remote notes updated after latest local updated_at
+    const latestLocal = notes.length > 0 ? Math.max(...notes.map(n => n.updatedAt.getTime())) : 0;
+    let remoteNotes: any[] = [];
+    try {
+      const url = endpoint + (endpoint.includes('?') ? '&' : '?') + 'updated_after=' + latestLocal;
+      const res = await fetch(url, {
+        headers: apiKey ? { 'X-API-Key': apiKey } : {},
+      });
+      if (!res.ok) throw new Error('Failed to fetch remote notes');
+      const remoteNotesResult = await res.json();
+      remoteNotes = remoteNotesResult.map((r: any) => ({
+        ...r,
+        tags: r.tags ? r.tags.split(',').map((tag: string) => tag.trim()) : [],
+        links: r.links ? r.links.split(',').map((link: string) => link.trim()) : []
+      }));
+    } catch (e) {
+      console.error('Failed to download remote notes', e);
+      alert('Failed to download remote notes: ' + (e && (e as any).message));
+      return;
+    }
+
+    // 3. Merge remote notes, resolving conflicts by updated_at (latest wins)
+    setNotes(prev => {
+      const byId = new Map<string, Note>();
+      // Add all local notes
+      for (const n of prev) {
+        byId.set(n.id, n);
+      }
+      // Merge remote notes
+      for (const r of remoteNotes) {
+        const local = byId.get(r.id);
+        const remoteUpdated = new Date(r.updated_at || r.updatedAt);
+        if (!local || remoteUpdated > local.updatedAt) {
+          byId.set(r.id, {
+            ...local,
+            ...r,
+            createdAt: new Date(r.created_at || r.createdAt),
+            updatedAt: remoteUpdated,
+            dirty: false,
+          });
+        }
+      }
+      // After upload, clear dirty flag for notes that were uploaded
+      for (const n of dirtyNotes) {
+        const merged = byId.get(n.id);
+        if (merged && merged.updatedAt.getTime() === n.updatedAt.getTime()) {
+          merged.dirty = false;
+        }
+      }
+      const mergedNotes = Array.from(byId.values());
+      updateAllLinks(mergedNotes);
+      return mergedNotes;
     });
   };
 
@@ -201,6 +297,7 @@ export const useNotes = () => {
     updateNote,
     deleteNote,
     exportNotes,
-    importNotes
+    importNotes,
+    syncNotes
   };
 };
