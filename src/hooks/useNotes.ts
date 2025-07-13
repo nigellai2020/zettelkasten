@@ -77,24 +77,27 @@ export const useNotes = () => {
 
   const deleteNote = (id: string) => {
     setNotes(prev => {
-      const noteToDelete = prev.find(note => note.id === id);
-      if (!noteToDelete) return prev;
-
-      // Remove the note and update all links
-      let newNotes = prev.filter(note => note.id !== id);
-
-      // Remove any broken links that pointed to the deleted note
-      newNotes = newNotes.map(note => ({
-        ...note,
-        content: note.content.replace(
-          new RegExp(`\[\[${escapeRegExp(noteToDelete.title)}\]\]`, 'gi'),
-          noteToDelete.title // Convert [[Title]] back to plain text
-        ),
-        dirty: true
-      }));
-
-      updateAllLinks(newNotes);
-      return newNotes;
+      return prev.map(note => {
+        if (note.id === id) {
+          return {
+            ...note,
+            deleted: true,
+            dirty: true,
+            // Optionally clear content/title/tags for privacy:
+            // content: '',
+            // title: '',
+            // tags: [],
+          };
+        }
+        // Remove any broken links that pointed to the deleted note
+        return {
+          ...note,
+          content: note.content.replace(
+            new RegExp(`\[\[${escapeRegExp(note.title)}\]\]`, 'gi'),
+            note.title // Convert [[Title]] back to plain text
+          ),
+        };
+      });
     });
   };
   // --- SYNC LOGIC ---
@@ -128,6 +131,7 @@ export const useNotes = () => {
             content: note.content,
             tags: note.tags.join(','),
             links: note.links.join(','),
+            deleted: note.deleted ? 1 : 0,
           })
         });
       } catch (e) {
@@ -149,7 +153,8 @@ export const useNotes = () => {
       remoteNotes = remoteNotesResult.map((r: any) => ({
         ...r,
         tags: r.tags ? r.tags.split(',').map((tag: string) => tag.trim()) : [],
-        links: r.links ? r.links.split(',').map((link: string) => link.trim()) : []
+        links: r.links ? r.links.split(',').map((link: string) => link.trim()) : [],
+        deleted: r.deleted === 1 || r.deleted === true,
       }));
     } catch (e) {
       console.error('Failed to download remote notes', e);
@@ -185,7 +190,8 @@ export const useNotes = () => {
           merged.dirty = false;
         }
       }
-      const mergedNotes = Array.from(byId.values());
+      // Remove deleted notes from the local list (tombstone cleanup)
+      const mergedNotes = Array.from(byId.values()).filter(n => !n.deleted);
       updateAllLinks(mergedNotes);
       return mergedNotes;
     });

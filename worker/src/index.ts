@@ -11,15 +11,26 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
-const corsHeaders = {
-	'Access-Control-Allow-Origin': 'http://localhost:5173',
-	'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-	'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-API-Key',
-};
+
+const allowedOrigins = [
+	'http://localhost:5173',
+	'https://zettelkasten-3pj.pages.dev',
+	// Add more allowed origins as needed
+];
+
+function getCorsHeaders(request: Request) {
+	const origin = request.headers.get('Origin');
+	const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+	return {
+		'Access-Control-Allow-Origin': allowOrigin,
+		'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+		'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-API-Key',
+	};
+}
 
 function handleOptions(request: Request) {
 	// Handle CORS preflight
-	return new Response(null, { headers: corsHeaders });
+	return new Response(null, { headers: getCorsHeaders(request) });
 }
 
 export default {
@@ -27,6 +38,7 @@ export default {
 		if (request.method === 'OPTIONS') {
 			return handleOptions(request);
 		}
+		const corsHeaders = getCorsHeaders(request);
 		const apiKey = request.headers.get("X-API-Key");
 		if (apiKey !== env.SECRET_KEY) {
 			return new Response("Unauthorized", { status: 401, headers: corsHeaders });
@@ -36,10 +48,10 @@ export default {
 			try {
 				// Support incremental sync: ?updated_after=timestamp
 				const updatedAfter = url.searchParams.get('updated_after');
-				let query = 'SELECT * FROM notes';
+				let query = 'SELECT * FROM notes WHERE deleted IS NULL OR deleted = 0';
 				let params: any[] = [];
 				if (updatedAfter) {
-					query += ' WHERE updated_at > ?';
+					query += ' AND updated_at > ?';
 					params.push(Number(updatedAfter));
 				}
 				const { results } = await env.DB.prepare(query).bind(...params).all();
@@ -55,19 +67,13 @@ export default {
 		}
 		if (url.pathname === '/api/notes' && request.method === 'POST') {
 			try {
-				const { id, title, content, tags, links } = await request.json() as any;
+				const { id, title, content, tags, links, deleted } = await request.json() as any;
 				const now = Date.now();
 				await env.DB.prepare(
-					`INSERT INTO notes (id, title, content, tags, created_at, updated_at, links)
-				 VALUES (?, ?, ?, ?, ?, ?, ?)
-				 ON CONFLICT(id) DO UPDATE SET
-				   title=excluded.title,
-				   content=excluded.content,
-				   tags=excluded.tags,
-				   updated_at=excluded.updated_at,
-				   links=excluded.links`
+					'INSERT INTO notes (id, title, content, tags, created_at, updated_at, links, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)' +
+					' ON CONFLICT(id) DO UPDATE SET title=excluded.title, content=excluded.content, tags=excluded.tags, updated_at=excluded.updated_at, links=excluded.links, deleted=excluded.deleted'
 				)
-					.bind(id, title, content, tags, now, now, links)
+					.bind(id, title, content, tags, now, now, links, deleted ? 1 : 0)
 					.run();
 				return new Response(JSON.stringify({ message: 'Note added' }), {
 					status: 201,

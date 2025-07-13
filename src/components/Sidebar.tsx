@@ -25,12 +25,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'search' | 'tags'>('all');
 
-  const searchResults = searchQuery ? searchNotes(searchQuery, notes) : [];
-  const allTags = [...new Set(notes.flatMap(note => note.tags))].sort();
-  
+  // Only show non-deleted notes
+  const visibleNotes = notes.filter(note => !note.deleted);
+  const searchResults = searchQuery ? searchNotes(searchQuery, visibleNotes) : [];
+  const allTags = [...new Set(visibleNotes.flatMap(note => note.tags))].sort();
+
   const filteredNotes = selectedTag 
-    ? notes.filter(note => note.tags.includes(selectedTag))
-    : notes;
+    ? visibleNotes.filter(note => note.tags.includes(selectedTag))
+    : visibleNotes;
 
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

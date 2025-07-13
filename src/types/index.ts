@@ -7,6 +7,7 @@ export interface Note {
   updatedAt: Date;
   links: string[]; // IDs of linked notes
   dirty?: boolean; // true if local changes not yet synced
+  deleted?: boolean; // true if note is deleted (tombstone)
 }
 
 export interface SearchResult {
