@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNotes } from './hooks/useNotes';
+import { useSync } from './hooks/useSync';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { NoteEditor } from './components/NoteEditor';
@@ -8,11 +9,12 @@ import { GraphView } from './components/GraphView';
 import { TreeView } from './components/TreeView';
 
 function App() {
-  const { notes, loading, createNote, updateNote, deleteNote, exportNotes, importNotes, syncNotes } = useNotes();
+  const { notes, loading, createNote, updateNote, deleteNote, exportNotes, importNotes, updateAllLinks, setNotes } = useNotes();
+  const { syncNotes } = useSync();
 
   // Sync notes with Worker API
   const handleSyncNotes = async () => {
-    await syncNotes();
+    await syncNotes(notes, setNotes, updateAllLinks);
   };
 
   // Multi-tab state, persisted in localStorage
@@ -188,7 +190,7 @@ function App() {
               notes={notes
                 .slice()
                 .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-                .slice(0, 50)
+                // .slice(0, 50)
               }
               selectedNoteId={activeTabId}
               onSelectNote={handleSelectNote}

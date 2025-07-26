@@ -11,14 +11,18 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
+function getAllowedOrigins(env: Env): string[] {
+	const defaultOrigins = ['http://localhost:5173'];
+	
+	if (env.ALLOWED_ORIGINS) {
+		return env.ALLOWED_ORIGINS.split(',').map((origin: string) => origin.trim());
+	}
+	
+	return defaultOrigins;
+}
 
-const allowedOrigins = [
-	'http://localhost:5173',
-	'https://zettelkasten-3pj.pages.dev',
-	// Add more allowed origins as needed
-];
-
-function getCorsHeaders(request: Request) {
+function getCorsHeaders(request: Request, env: Env) {
+	const allowedOrigins = getAllowedOrigins(env);
 	const origin = request.headers.get('Origin');
 	const allowOrigin = origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
 	return {
@@ -28,22 +32,107 @@ function getCorsHeaders(request: Request) {
 	};
 }
 
-function handleOptions(request: Request) {
+function handleOptions(request: Request, env: Env) {
 	// Handle CORS preflight
-	return new Response(null, { headers: getCorsHeaders(request) });
+	return new Response(null, { headers: getCorsHeaders(request, env) });
 }
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		if (request.method === 'OPTIONS') {
-			return handleOptions(request);
+		const corsHeaders = getCorsHeaders(request, env);
+		const url = new URL(request.url);
+
+		// Login endpoint
+		if (url.pathname === '/api/login' && request.method === 'POST') {
+			try {
+				const { password } = await request.json() as { password?: string };
+				if (typeof password !== 'string' || !password) {
+					return new Response(JSON.stringify({ error: 'Missing password' }), { status: 400, headers: corsHeaders });
+				}
+				if (password !== env.SECRET_KEY) {
+					return new Response(JSON.stringify({ error: 'Invalid password' }), { status: 401, headers: corsHeaders });
+				}
+				// Generate a session token and store it in KV
+				const sessionToken = crypto.randomUUID();
+				const sessionData = {
+					createdAt: Date.now(),
+					expiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
+					userId: 'user', // Simple user identifier
+				};
+				// Store session in KV with 24-hour expiration
+				await env.SESSIONS.put(sessionToken, JSON.stringify(sessionData), {
+					expirationTtl: 24 * 60 * 60, // 24 hours in seconds
+				});
+				return new Response(JSON.stringify({ token: sessionToken }), { status: 200, headers: corsHeaders });
+			} catch (error: any) {
+				return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
+			}
 		}
-		const corsHeaders = getCorsHeaders(request);
+
+		// Logout endpoint
+		if (url.pathname === '/api/logout' && request.method === 'POST') {
+			const authHeader = request.headers.get("Authorization");
+			if (authHeader && authHeader.startsWith('Bearer ')) {
+				const token = authHeader.substring(7);
+				try {
+					// Delete the session from KV
+					await env.SESSIONS.delete(token);
+					return new Response(JSON.stringify({ message: 'Logged out successfully' }), { 
+						status: 200, 
+						headers: { 'Content-Type': 'application/json', ...corsHeaders }
+					});
+				} catch (error: any) {
+					return new Response(JSON.stringify({ error: 'Failed to logout' }), { 
+						status: 500, 
+						headers: { 'Content-Type': 'application/json', ...corsHeaders }
+					});
+				}
+			}
+			return new Response(JSON.stringify({ error: 'No valid session found' }), { 
+				status: 400, 
+				headers: { 'Content-Type': 'application/json', ...corsHeaders }
+			});
+		}
+
+		if (request.method === 'OPTIONS') {
+			return handleOptions(request, env);
+		}
+
+		// Auth for all other endpoints
 		const apiKey = request.headers.get("X-API-Key");
-		if (apiKey !== env.SECRET_KEY) {
+		// Accept either X-API-Key or Authorization: Bearer <token>
+		const authHeader = request.headers.get("Authorization");
+		let authorized = false;
+		
+		// Check API key authentication
+		// if (apiKey && apiKey === env.SECRET_KEY) {
+		// 	authorized = true;
+		// }
+		
+		// Check Bearer token authentication
+		if (!authorized && authHeader && authHeader.startsWith('Bearer ')) {
+			const token = authHeader.substring(7); // Remove "Bearer " prefix
+			try {
+				const sessionData = await env.SESSIONS.get(token);
+				if (sessionData) {
+					const session = JSON.parse(sessionData);
+					// Check if session is still valid (not expired)
+					if (session.expiresAt > Date.now()) {
+						authorized = true;
+					} else {
+						// Clean up expired session
+						await env.SESSIONS.delete(token);
+					}
+				}
+			} catch (error) {
+				console.error('Error validating session token:', error);
+			}
+		}
+		
+		if (!authorized) {
 			return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 		}
-		const url = new URL(request.url);
+
 		if (url.pathname === '/api/notes' && request.method === 'GET') {
 			try {
 				// Support incremental sync: ?updated_after=timestamp

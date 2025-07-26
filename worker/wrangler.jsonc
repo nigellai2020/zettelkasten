@@ -17,6 +17,13 @@
 			"database_id": "029517e1-c843-4e1f-8f27-0951631d4d98"
 		}
 	],
+	"kv_namespaces": [
+		{
+			"binding": "SESSIONS",
+			"id": "d8051f60e4294a53a819cb505543aaee",
+			"preview_id": "d66af350ee6445b995bc588c99f402fd"
+		}
+	],
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

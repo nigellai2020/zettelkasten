@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Brain, Network, TreePine, FileText, Sun, Moon, Search } from 'lucide-react';
+import { Brain, Network, TreePine, FileText, Sun, Moon, Search, LogIn, LogOut } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuthContext } from '../contexts/AuthContext';
 import { SearchModal } from './SearchModal';
+import { LoginModal } from './LoginModal';
 import { Note } from '../types';
 
 interface HeaderProps {
@@ -24,7 +26,9 @@ export const Header: React.FC<HeaderProps> = ({
   onDownloadFromWorker
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated, login, logout } = useAuthContext();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   return (
     <>
@@ -79,10 +83,31 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </nav>
 
-            {/* Right side - Search, Stats, Download, and Theme Toggle */}
+            {/* Right side - Search, Stats, Download, Auth, and Theme Toggle */}
             <div className="flex items-center gap-4">
-              {/* Sync notes button */}
-              {onDownloadFromWorker && (
+              {/* Authentication */}
+              {isAuthenticated ? (
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-4 py-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-medium transition-colors"
+                  title="Logout"
+                >
+                  <LogOut size={18} />
+                  <span>Logout</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsLoginOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg font-medium transition-colors"
+                  title="Login to enable sync"
+                >
+                  <LogIn size={18} />
+                  <span>Login</span>
+                </button>
+              )}
+              
+              {/* Sync notes button - only show when authenticated */}
+              {isAuthenticated && onDownloadFromWorker && (
                 <button
                   onClick={onDownloadFromWorker}
                   className="flex items-center gap-2 px-4 py-2 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg font-semibold transition-colors"
@@ -151,6 +176,13 @@ export const Header: React.FC<HeaderProps> = ({
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onSelectNote={onSelectNote}
+      />
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        onLogin={login}
       />
     </>
   );
