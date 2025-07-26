@@ -13,8 +13,8 @@ export const useSync = () => {
     
     const authHeaders = getAuthHeaders();
     
-    // 1. Upload dirty notes
-    const dirtyNotes = notes.filter(n => n.dirty);
+    // 1. Upload dirty notes (excluding deleted ones - deleted notes are handled locally)
+    const dirtyNotes = notes.filter(n => n.dirty && !n.deleted);
     for (const note of dirtyNotes) {
       try {
         const res = await fetch(endpoint, {
