@@ -54,16 +54,20 @@ export default {
 				}
 				// Generate a session token and store it in KV
 				const sessionToken = crypto.randomUUID();
+				const expiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
 				const sessionData = {
 					createdAt: Date.now(),
-					expiresAt: Date.now() + (24 * 60 * 60 * 1000), // 24 hours
+					expiresAt,
 					userId: 'user', // Simple user identifier
 				};
 				// Store session in KV with 24-hour expiration
 				await env.SESSIONS.put(sessionToken, JSON.stringify(sessionData), {
 					expirationTtl: 24 * 60 * 60, // 24 hours in seconds
 				});
-				return new Response(JSON.stringify({ token: sessionToken }), { status: 200, headers: corsHeaders });
+				return new Response(JSON.stringify({ 
+					token: sessionToken, 
+					expiresAt 
+				}), { status: 200, headers: corsHeaders });
 			} catch (error: any) {
 				return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
 			}
