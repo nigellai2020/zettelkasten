@@ -5,7 +5,7 @@ import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { NoteEditor } from './components/NoteEditor';
 import { MetadataPanel } from './components/MetadataPanel';
-import { GraphView } from './components/GraphView';
+import { GraphView } from './components/GraphView3D';
 import { TreeView } from './components/TreeView';
 
 function App() {
