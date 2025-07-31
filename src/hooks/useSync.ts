@@ -38,9 +38,15 @@ export const useSync = () => {
           console.error('Authentication failed for note upload. Session may have expired.');
           throw new Error('Authentication failed. Please login again.');
         }
+        
+        if (!res.ok) {
+          throw new Error(`Failed to upload note: ${res.status} ${res.statusText}`);
+        }
       } catch (e) {
-        // If upload fails, keep dirty flag
+        // If upload fails, keep dirty flag and stop sync
         console.error('Failed to upload note', note.id, e);
+        alert('Sync failed during upload: ' + (e instanceof Error ? e.message : 'Unknown error'));
+        return; // Stop sync process
       }
     }
 
