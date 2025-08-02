@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+// Store label meshes for per-frame scaling
+const labelMeshMap = new Map<string, THREE.Mesh>();
 import { X, ZoomIn, ZoomOut, RotateCcw, Play, Pause, Settings, ChevronDown, ChevronRight, Tag, FileText } from 'lucide-react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
@@ -278,36 +280,79 @@ export const GraphView: React.FC<GraphViewProps> = ({
       const truncatedLabel = node.title.length > settings.labelMaxLength 
         ? node.title.substring(0, settings.labelMaxLength) + '...' 
         : node.title;
-        
-      // Create canvas for text
+
+      // HiDPI fix: render at device pixel ratio
+      const DPR = window.devicePixelRatio || 1;
+      const logicalWidth = 320;
+      const logicalHeight = 80;
       const canvas = document.createElement('canvas');
+      canvas.width = logicalWidth * DPR;
+      canvas.height = logicalHeight * DPR;
+      canvas.style.width = logicalWidth + 'px';
+      canvas.style.height = logicalHeight + 'px';
       const context = canvas.getContext('2d');
-      const fontSize = 24;
-      canvas.width = 256;
-      canvas.height = 64;
-      
+
       if (context) {
-        context.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        
-        context.font = `${fontSize}px Arial`;
-        context.fillStyle = node.id === currentSelectedId ? '#ffffff' : '#e5e5e5';
+        context.setTransform(DPR, 0, 0, DPR, 0, 0);
+        // Simple background
+        context.fillStyle = 'rgba(0,0,0,0.95)';
+        context.fillRect(0, 0, logicalWidth, logicalHeight);
+
+        // Plain font, no bold, no shadow, no stroke
+        context.font = '28px Arial';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
-        context.fillText(truncatedLabel, canvas.width / 2, canvas.height / 2);
-        
+
+        // Fill text only
+        context.fillStyle = node.id === currentSelectedId ? '#ffffff' : '#e5e5e5';
+        context.fillText(truncatedLabel, logicalWidth / 2, logicalHeight / 2);
+
         // Create texture and material
         const texture = new THREE.CanvasTexture(canvas);
-        const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
-        const sprite = new THREE.Sprite(spriteMaterial);
-        sprite.scale.set(20, 5, 1);
-        sprite.position.set(0, (node.val || 4) + 8, 0);
-        sphere.add(sprite);
+        texture.needsUpdate = true;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+
+        // Use PlaneGeometry for label
+        const planeGeo = new THREE.PlaneGeometry(180, 30);
+        const planeMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+        const labelMesh = new THREE.Mesh(planeGeo, planeMat);
+        labelMesh.position.set(0, (node.val || 4) + 10, 0);
+        labelMeshMap.set(node.id, labelMesh);
+        sphere.add(labelMesh);
       }
     }
-    
     return sphere;
   }, [localSelectedNodeId, selectedNoteId, settings.showLabels, settings.labelMaxLength]);
+
+  // Per-frame label scaling (must be at top-level, not inside renderNode3D)
+  useEffect(() => {
+    if (!fgRef.current) return;
+    let animId: number;
+    function animateLabels() {
+      const camera = fgRef.current.camera && fgRef.current.camera();
+      if (camera) {
+        labelMeshMap.forEach((mesh) => {
+          // Get mesh world position
+          const worldPos = new THREE.Vector3();
+          mesh.getWorldPosition(worldPos);
+          // Get camera position
+          const cameraPos = camera.position;
+          // Calculate distance
+          const dist = worldPos.distanceTo(cameraPos);
+          // Adjust scale: closer = smaller, farther = larger
+          const baseScreenScale = 600;
+          const scale = Math.max(1, dist / baseScreenScale);
+          mesh.scale.set(scale, scale, 1);
+        });
+      }
+      animId = requestAnimationFrame(animateLabels);
+    }
+    animateLabels();
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [graphData, settings.showLabels, settings.labelMaxLength]);
 
   // Toggle animation
   const toggleAnimation = useCallback(() => {
@@ -360,7 +405,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg w-full h-full max-w-7xl max-h-[95vh] flex flex-col shadow-2xl border border-gray-700 overflow-hidden">
+      <div className="bg-gray-900 rounded-lg w-full h-full max-h-[95vh] flex flex-col shadow-2xl border border-gray-700 overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-gray-700 flex items-center justify-between bg-gray-800">
           <div>
@@ -684,7 +729,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
           </div> */}
           
           {/* Selected Note Info */}
-          {(localSelectedNodeId || selectedNoteId) && (
+          {/* {(localSelectedNodeId || selectedNoteId) && (
             <div className="absolute top-4 right-4 bg-gray-800 bg-opacity-95 p-4 rounded-lg border border-gray-600 max-w-sm">
               {(() => {
                 const currentSelectedId = localSelectedNodeId || selectedNoteId;
@@ -703,7 +748,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
                 );
               })()}
             </div>
-          )}
+          )} */}
           </div>
         </div>
       </div>
