@@ -77,6 +77,8 @@ export const useNotes = () => {
 
   const deleteNote = (id: string) => {
     setNotes(prev => {
+      const deletedNote = prev.find(note => note.id === id);
+      const deletedNoteTitle = deletedNote ? deletedNote.title : '';
       return prev.map(note => {
         if (note.id === id) {
           return {
@@ -93,8 +95,8 @@ export const useNotes = () => {
         return {
           ...note,
           content: note.content.replace(
-            new RegExp(`\[\[${escapeRegExp(note.title)}\]\]`, 'gi'),
-            note.title // Convert [[Title]] back to plain text
+            new RegExp(`\[\[${escapeRegExp(deletedNoteTitle)}\]\]`, 'gi'),
+            deletedNoteTitle // Convert [[Title]] back to plain text
           ),
         };
       });

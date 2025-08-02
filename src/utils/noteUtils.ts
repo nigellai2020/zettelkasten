@@ -13,12 +13,12 @@ export const extractLinks = (content: string): string[] => {
 };
 
 export const extractTags = (content: string): string[] => {
-  const tagRegex = /#([a-zA-Z0-9_-]+)/g;
+  const tagRegex = /(^|\s)#([a-zA-Z0-9_]+)(?!-)\b/g;
   const matches = [];
   let match;
   
   while ((match = tagRegex.exec(content)) !== null) {
-    matches.push(match[1]);
+    matches.push(match[2]);
   }
   
   return [...new Set(matches)];
