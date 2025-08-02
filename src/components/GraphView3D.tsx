@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { X, ZoomIn, ZoomOut, RotateCcw, Play, Pause, Settings } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCcw, Play, Pause, Settings, ChevronDown, ChevronRight, Tag, FileText } from 'lucide-react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
 import { Note } from '../types';
@@ -16,6 +16,9 @@ interface GraphNode {
   fx?: number; // Fixed position x
   fy?: number; // Fixed position y
   fz?: number; // Fixed position z
+  x?: number; // Current position x
+  y?: number; // Current position y
+  z?: number; // Current position z
 }
 
 interface GraphLink {
@@ -46,6 +49,9 @@ export const GraphView: React.FC<GraphViewProps> = ({
   const fgRef = useRef<any>();
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [isAnimating, setIsAnimating] = useState(true);
+  const [showTreeView, setShowTreeView] = useState(true);
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  const [localSelectedNodeId, setLocalSelectedNodeId] = useState<string | null>(selectedNoteId);
   const [settings, setSettings] = useState({
     nodeRelSize: 6,
     linkWidth: 2,
@@ -59,7 +65,8 @@ export const GraphView: React.FC<GraphViewProps> = ({
 
   // Generate colors for different tag groups
   const getNodeColor = useCallback((node: GraphNode) => {
-    if (node.id === selectedNoteId) return '#ff6b6b';
+    const currentSelectedId = localSelectedNodeId || selectedNoteId;
+    if (node.id === currentSelectedId) return '#ff6b6b';
     
     if (settings.nodeColorScheme === 'category') {
       const mainTag = node.tags[0];
@@ -76,7 +83,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
     }
     
     return '#74b9ff';
-  }, [selectedNoteId, settings.nodeColorScheme]);
+  }, [localSelectedNodeId, selectedNoteId, settings.nodeColorScheme]);
 
   // Calculate node value based on connections and content
   const getNodeValue = useCallback((note: Note, allNotes: Note[]) => {
@@ -93,6 +100,86 @@ export const GraphView: React.FC<GraphViewProps> = ({
     const tagBonus = commonTags.length * 0.5;
     return baseStrength + tagBonus;
   }, []);
+
+  // Get tag color (same as node color logic)
+  const getTagColor = useCallback((tag: string) => {
+    const hash = tag.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    
+    const colors = ['#74b9ff', '#0984e3', '#6c5ce7', '#a29bfe', '#fd79a8', '#e84393', '#00b894', '#00cec9', '#fdcb6e', '#e17055'];
+    return colors[Math.abs(hash) % colors.length];
+  }, []);
+
+  // Organize notes by tags for tree view
+  const organizeNotesByTags = useCallback(() => {
+    const tagGroups = new Map<string, Note[]>();
+    const untaggedNotes: Note[] = [];
+
+    notes.forEach(note => {
+      if (note.tags.length === 0) {
+        untaggedNotes.push(note);
+      } else {
+        note.tags.forEach(tag => {
+          if (!tagGroups.has(tag)) {
+            tagGroups.set(tag, []);
+          }
+          tagGroups.get(tag)!.push(note);
+        });
+      }
+    });
+
+    // Sort tags by note count (descending)
+    const sortedTags = Array.from(tagGroups.entries())
+      .sort(([, notesA], [, notesB]) => notesB.length - notesA.length);
+
+    return { sortedTags, untaggedNotes };
+  }, [notes]);
+
+  // Handle tree navigation
+  const handleTreeNodeClick = useCallback((noteId: string) => {
+    // Focus on the node in 3D space without calling onSelectNote (which closes the graph)
+    if (fgRef.current) {
+      const nodeObj = graphData.nodes.find((n: any) => n.id === noteId);
+      if (nodeObj) {
+        // Focus camera on the node
+        const distance = 200;
+        const distRatio = 1 + distance / Math.hypot(nodeObj.x || 0, nodeObj.y || 0, nodeObj.z || 0);
+        
+        fgRef.current.cameraPosition(
+          { 
+            x: (nodeObj.x || 0) * distRatio, 
+            y: (nodeObj.y || 0) * distRatio, 
+            z: (nodeObj.z || 0) * distRatio 
+          },
+          nodeObj,
+          2000
+        );
+        
+        // Update local selection state for highlighting (don't call onSelectNote)
+        setLocalSelectedNodeId(noteId);
+      }
+    }
+  }, [graphData.nodes]);
+
+  // Toggle tag expansion
+  const toggleTagExpansion = useCallback((tag: string) => {
+    setExpandedTags(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(tag)) {
+        newSet.delete(tag);
+      } else {
+        newSet.add(tag);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Sync local selection with external selection
+  useEffect(() => {
+    setLocalSelectedNodeId(selectedNoteId);
+  }, [selectedNoteId]);
 
   useEffect(() => {
     // Create sophisticated graph data
@@ -163,16 +250,17 @@ export const GraphView: React.FC<GraphViewProps> = ({
 
   // Custom node rendering with labels for 3D
   const renderNode3D = useCallback((node: any) => {
+    const currentSelectedId = localSelectedNodeId || selectedNoteId;
     const nodeGeometry = new THREE.SphereGeometry(node.val || 4, 16, 16);
     const nodeMaterial = new THREE.MeshLambertMaterial({ 
       color: node.color || '#74b9ff',
       transparent: true,
-      opacity: node.id === selectedNoteId ? 1 : 0.8
+      opacity: node.id === currentSelectedId ? 1 : 0.8
     });
     const sphere = new THREE.Mesh(nodeGeometry, nodeMaterial);
     
     // Add selection ring for selected nodes
-    if (node.id === selectedNoteId) {
+    if (node.id === currentSelectedId) {
       const ringGeometry = new THREE.RingGeometry((node.val || 4) + 1, (node.val || 4) + 3, 32);
       const ringMaterial = new THREE.MeshBasicMaterial({ 
         color: '#ffffff', 
@@ -203,7 +291,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
         context.fillRect(0, 0, canvas.width, canvas.height);
         
         context.font = `${fontSize}px Arial`;
-        context.fillStyle = node.id === selectedNoteId ? '#ffffff' : '#e5e5e5';
+        context.fillStyle = node.id === currentSelectedId ? '#ffffff' : '#e5e5e5';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         context.fillText(truncatedLabel, canvas.width / 2, canvas.height / 2);
@@ -219,7 +307,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
     }
     
     return sphere;
-  }, [selectedNoteId, settings.showLabels, settings.labelMaxLength]);
+  }, [localSelectedNodeId, selectedNoteId, settings.showLabels, settings.labelMaxLength]);
 
   // Toggle animation
   const toggleAnimation = useCallback(() => {
@@ -411,34 +499,173 @@ export const GraphView: React.FC<GraphViewProps> = ({
         </div>
 
         {/* 3D Graph */}
-        <div className="flex-1 relative">
-          <ForceGraph3D
-            ref={fgRef}
-            graphData={graphData}
-            nodeLabel="title"
-            nodeColor="color"
-            nodeVal="val"
-            nodeRelSize={settings.nodeRelSize}
-            linkColor="color"
-            linkWidth="strength"
-            linkOpacity={settings.linkOpacity}
-            onNodeClick={handleNodeClick}
-            onNodeHover={handleNodeHover}
-            enableNodeDrag={true}
-            enableNavigationControls={true}
-            showNavInfo={true}
-            backgroundColor={settings.backgroundColor}
-            nodeThreeObject={renderNode3D}
-            warmupTicks={100}
-            cooldownTicks={200}
-            d3AlphaDecay={0.02}
-            d3VelocityDecay={0.3}
-            width={undefined}
-            height={undefined}
-          />
+        <div className="flex-1 relative flex">
+          {/* Tree View Sidebar */}
+          {showTreeView && (
+            <div className="w-80 bg-gray-850 border-r border-gray-700 flex flex-col h-full">
+              <div className="p-3 border-b border-gray-700 bg-gray-800 flex-shrink-0">
+                <h3 className="text-white font-semibold text-sm flex items-center">
+                  <Tag size={16} className="mr-2" />
+                  Navigation Tree
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">Click notes to focus in 3D</p>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-2" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+                {(() => {
+                  const { sortedTags, untaggedNotes } = organizeNotesByTags();
+                  
+                  return (
+                    <div className="space-y-1">
+                      {/* Tagged Notes */}
+                      {sortedTags.map(([tag, tagNotes]) => (
+                        <div key={tag} className="select-none">
+                          <button
+                            onClick={() => toggleTagExpansion(tag)}
+                            className="w-full flex items-center p-2 rounded hover:bg-gray-700 text-left group transition-colors"
+                          >
+                            {expandedTags.has(tag) ? (
+                              <ChevronDown size={14} className="mr-2 text-gray-400" />
+                            ) : (
+                              <ChevronRight size={14} className="mr-2 text-gray-400" />
+                            )}
+                            <div
+                              className="w-3 h-3 rounded-full mr-2 flex-shrink-0"
+                              style={{ backgroundColor: getTagColor(tag) }}
+                            />
+                            <span className="text-white text-sm font-medium truncate flex-1">
+                              {tag}
+                            </span>
+                            <span className="text-xs text-gray-400 ml-2">
+                              {tagNotes.length}
+                            </span>
+                          </button>
+                          
+                          {expandedTags.has(tag) && (
+                            <div className="ml-8 mt-1 space-y-1">
+                              {tagNotes.map(note => (
+                                <button
+                                  key={note.id}
+                                  onClick={() => handleTreeNodeClick(note.id)}
+                                  className={`w-full flex items-center p-2 rounded text-left transition-colors group ${
+                                    note.id === (localSelectedNodeId || selectedNoteId)
+                                      ? 'bg-blue-600 bg-opacity-20 border border-blue-500 border-opacity-30' 
+                                      : 'hover:bg-gray-700'
+                                  }`}
+                                >
+                                  <FileText size={14} className="mr-2 text-gray-400 flex-shrink-0" />
+                                  <span className={`text-sm truncate flex-1 ${
+                                    note.id === (localSelectedNodeId || selectedNoteId) ? 'text-blue-200' : 'text-gray-300'
+                                  }`}>
+                                    {note.title.length > 25 ? note.title.substring(0, 25) + '...' : note.title}
+                                  </span>
+                                  {note.links.length > 0 && (
+                                    <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
+                                      {note.links.length}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {/* Untagged Notes */}
+                      {untaggedNotes.length > 0 && (
+                        <div className="select-none">
+                          <button
+                            onClick={() => toggleTagExpansion('__untagged__')}
+                            className="w-full flex items-center p-2 rounded hover:bg-gray-700 text-left group transition-colors"
+                          >
+                            {expandedTags.has('__untagged__') ? (
+                              <ChevronDown size={14} className="mr-2 text-gray-400" />
+                            ) : (
+                              <ChevronRight size={14} className="mr-2 text-gray-400" />
+                            )}
+                            <div className="w-3 h-3 rounded-full mr-2 flex-shrink-0 bg-gray-500" />
+                            <span className="text-white text-sm font-medium truncate flex-1">
+                              Untagged
+                            </span>
+                            <span className="text-xs text-gray-400 ml-2">
+                              {untaggedNotes.length}
+                            </span>
+                          </button>
+                          
+                          {expandedTags.has('__untagged__') && (
+                            <div className="ml-8 mt-1 space-y-1">
+                              {untaggedNotes.map(note => (
+                                <button
+                                  key={note.id}
+                                  onClick={() => handleTreeNodeClick(note.id)}
+                                  className={`w-full flex items-center p-2 rounded text-left transition-colors group ${
+                                    note.id === (localSelectedNodeId || selectedNoteId)
+                                      ? 'bg-blue-600 bg-opacity-20 border border-blue-500 border-opacity-30' 
+                                      : 'hover:bg-gray-700'
+                                  }`}
+                                >
+                                  <FileText size={14} className="mr-2 text-gray-400 flex-shrink-0" />
+                                  <span className={`text-sm truncate flex-1 ${
+                                    note.id === (localSelectedNodeId || selectedNoteId) ? 'text-blue-200' : 'text-gray-300'
+                                  }`}>
+                                    {note.title.length > 25 ? note.title.substring(0, 25) + '...' : note.title}
+                                  </span>
+                                  {note.links.length > 0 && (
+                                    <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
+                                      {note.links.length}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+          
+          {/* 3D Graph Container */}
+          <div className="flex-1 relative">
+            <ForceGraph3D
+              ref={fgRef}
+              graphData={graphData}
+              nodeLabel="title"
+              nodeColor="color"
+              nodeVal="val"
+              nodeRelSize={settings.nodeRelSize}
+              linkColor="color"
+              linkWidth="strength"
+              linkOpacity={settings.linkOpacity}
+              onNodeClick={handleNodeClick}
+              onNodeHover={handleNodeHover}
+              enableNodeDrag={true}
+              enableNavigationControls={true}
+              showNavInfo={true}
+              backgroundColor={settings.backgroundColor}
+              nodeThreeObject={renderNode3D}
+              warmupTicks={100}
+              cooldownTicks={200}
+              d3AlphaDecay={0.02}
+              d3VelocityDecay={0.3}
+              width={undefined}
+              height={undefined}
+            />
+            
+            {/* Tree View Toggle Button */}
+            <button
+              onClick={() => setShowTreeView(prev => !prev)}
+              className="absolute top-4 left-4 p-2 bg-gray-800 bg-opacity-90 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors border border-gray-600"
+              title={showTreeView ? "Hide navigation tree" : "Show navigation tree"}
+            >
+              <Tag size={18} />
+            </button>
           
           {/* Instructions Overlay */}
-          <div className="absolute bottom-4 left-4 bg-gray-800 bg-opacity-90 p-4 rounded-lg text-sm text-gray-300 border border-gray-600 max-w-xs">
+          {/* <div className="absolute bottom-4 left-4 bg-gray-800 bg-opacity-90 p-4 rounded-lg text-sm text-gray-300 border border-gray-600 max-w-xs">
             <h4 className="text-white font-semibold mb-2">Controls</h4>
             <div className="space-y-1 text-xs">
               <div>• <strong>Click</strong> nodes to select</div>
@@ -454,13 +681,14 @@ export const GraphView: React.FC<GraphViewProps> = ({
                 </div>
               </div>
             )}
-          </div>
+          </div> */}
           
           {/* Selected Note Info */}
-          {selectedNoteId && (
+          {(localSelectedNodeId || selectedNoteId) && (
             <div className="absolute top-4 right-4 bg-gray-800 bg-opacity-95 p-4 rounded-lg border border-gray-600 max-w-sm">
               {(() => {
-                const selectedNote = notes.find(n => n.id === selectedNoteId);
+                const currentSelectedId = localSelectedNodeId || selectedNoteId;
+                const selectedNote = notes.find(n => n.id === currentSelectedId);
                 if (!selectedNote) return null;
                 
                 return (
@@ -476,6 +704,7 @@ export const GraphView: React.FC<GraphViewProps> = ({
               })()}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
