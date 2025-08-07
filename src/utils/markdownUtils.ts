@@ -1,4 +1,6 @@
 import { marked } from 'marked';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import { Note } from '../types';
 
 // Configure marked with custom renderer
@@ -131,10 +133,65 @@ marked.setOptions({
 
 export const renderMarkdown = async (content: string, notes: Note[]): Promise<string> => {
   // First, process note links [[Note Title]]
-  const processedContent = processNoteLinks(content, notes);
-  
+  let processedContent = processNoteLinks(content, notes);
+
+  // Replace block math ($$...$$) with placeholders
+  const blockMathMatches: string[] = [];
+  processedContent = processedContent.replace(/\$\$([\s\S]+?)\$\$/g, (match, formula) => {
+    blockMathMatches.push(formula);
+    return `:::BLOCKMATH${blockMathMatches.length - 1}:::`;
+  });
+
+  // Inline math: $...$ (loop until all consecutive inline math are replaced)
+  const inlineMathRegex = /\$([^$\n]+?)\$/g;
+  let prevContent;
+  do {
+    prevContent = processedContent;
+    processedContent = processedContent.replace(inlineMathRegex, (match, formula) => {
+      // Avoid matching inside code blocks
+      if (/^\s*<code/.test(match)) return match;
+      try {
+        return katex.renderToString(formula, { displayMode: false });
+      } catch (err) {
+        return `<span class="katex-error">${escapeHtml(formula)}</span>`;
+      }
+    });
+  } while (processedContent !== prevContent);
+
   // Then render markdown
-  const htmlContent = await marked(processedContent);
+  let htmlContent = await marked(processedContent);
+
+  // Replace block math placeholders with KaTeX HTML (outside paragraphs/lists)
+  blockMathMatches.forEach((formula, i) => {
+    const katexHtml = (() => {
+      try {
+        return `<div class="katex-block">${katex.renderToString(formula, { displayMode: true })}</div>`;
+      } catch (err) {
+        return `<pre class="katex-error">${escapeHtml(formula)}</pre>`;
+      }
+    })();
+    // Remove wrapping <p> if present
+    htmlContent = htmlContent.replace(
+      new RegExp(`<p>\s*:::BLOCKMATH${i}:::\s*</p>`, 'g'),
+      katexHtml
+    );
+    // Remove wrapping <li> if present
+    htmlContent = htmlContent.replace(
+      new RegExp(`<li>\s*:::BLOCKMATH${i}:::\s*</li>`, 'g'),
+      `<li style="list-style:none">${katexHtml}</li>`
+    );
+    // Fallback: replace any remaining placeholder
+    htmlContent = htmlContent.replace(
+      new RegExp(`:::BLOCKMATH${i}:::`, 'g'),
+      katexHtml
+    );
+  });
+
+  // Remove trailing empty paragraphs and <br> tags
+  htmlContent = htmlContent.replace(/(<p>\s*<\/p>|<br\s*\/?>)+$/g, '');
+
+  // Remove all .katex-mathml elements
+  htmlContent = htmlContent.replace(/<span class="katex-mathml"[\s\S]*?<\/span>/g, '');
 
   return htmlContent;
 };
